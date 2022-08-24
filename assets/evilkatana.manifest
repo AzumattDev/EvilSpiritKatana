@@ -1,0 +1,81 @@
+ManifestFileVersion: 0
+CRC: 2529002476
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: 232ec95f079ca68c48fb1cc5e5cb2038
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: 5736f32e0433204ed26df6d498120a51
+HashAppended: 0
+ClassTypes:
+- Class: 1
+  Script: {instanceID: 0}
+- Class: 4
+  Script: {instanceID: 0}
+- Class: 21
+  Script: {instanceID: 0}
+- Class: 23
+  Script: {instanceID: 0}
+- Class: 28
+  Script: {instanceID: 0}
+- Class: 33
+  Script: {instanceID: 0}
+- Class: 43
+  Script: {instanceID: 0}
+- Class: 48
+  Script: {instanceID: 0}
+- Class: 54
+  Script: {instanceID: 0}
+- Class: 65
+  Script: {instanceID: 0}
+- Class: 82
+  Script: {instanceID: 0}
+- Class: 83
+  Script: {instanceID: 0}
+- Class: 114
+  Script: {fileID: 11500000, guid: d88eb241a0d09bf4dab6da6309cd4223, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: 00460fd9e24a0e6459caf0599463c4e7, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: 9d99793a24f0f244497bfc44fb9f2475, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: c0bb32ffa77197e4385460efe79b3fee, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: bd15d1c0940dcd84c875f6dd0262b720, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: 3a2481cdf46dd4b42b7fd15963f0f354, type: 3}
+- Class: 114
+  Script: {fileID: 11500000, guid: 30be24cc3c1e81e43be83aab7d6ef562, type: 3}
+- Class: 115
+  Script: {instanceID: 0}
+- Class: 164
+  Script: {instanceID: 0}
+- Class: 198
+  Script: {instanceID: 0}
+- Class: 199
+  Script: {instanceID: 0}
+- Class: 213
+  Script: {instanceID: 0}
+- Class: 241
+  Script: {instanceID: 0}
+- Class: 243
+  Script: {instanceID: 0}
+- Class: 245
+  Script: {instanceID: 0}
+SerializeReferenceClassIdentifiers:
+- AssemblyName: assembly_valheim
+  ClassName: Attack
+- AssemblyName: assembly_valheim
+  ClassName: EffectList
+- AssemblyName: assembly_valheim
+  ClassName: EffectList/EffectData
+- AssemblyName: assembly_valheim
+  ClassName: HitData/DamageTypes
+- AssemblyName: assembly_valheim
+  ClassName: ItemDrop/ItemData
+- AssemblyName: assembly_valheim
+  ClassName: ItemDrop/ItemData/SharedData
+Assets:
+- Assets/_CustomItems/Katana/EvilSpiritKatana.prefab
+Dependencies: []
