@@ -14,7 +14,7 @@ namespace EvilSpiritKatana
     public class EvilSpiritKatanaPlugin : BaseUnityPlugin
     {
         internal const string ModName = "EvilSpiritKatana";
-        internal const string ModVersion = "1.0.0";
+        internal const string ModVersion = "1.0.1";
         internal const string Author = "Azumatt";
         private const string ModGUID = Author + "." + ModName;
         private static string ConfigFileName = ModGUID + ".cfg";
