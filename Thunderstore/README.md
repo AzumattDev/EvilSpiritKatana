@@ -27,6 +27,10 @@ For Questions or Comments, find me in the Odin Plus Team Discord or in mine:
 
 ***
 > # Update Information (Latest listed first)
+> ### 1.0.3
+> - Mistlands update
+> ### 1.0.2
+> - I forgot? I think I fixed a bug?
 > ### 1.0.1
 > - Update ServerSync
 > ### v1.0.0
