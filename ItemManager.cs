@@ -74,6 +74,8 @@ public class ItemRecipe
 	public readonly RequiredResourceList RequiredUpgradeItems = new();
 	public readonly CraftingStationList Crafting = new();
 	public int CraftAmount = 1;
+	public bool RequireOnlyOneIngredient = false;
+	public float QualityResultAmountMultiplier = 1;
 	public ConfigEntryBase? RecipeIsActive = null;
 }
 
@@ -119,6 +121,12 @@ public struct DropTarget
 	public float chance;
 }
 
+public enum Toggle
+{
+	On = 1,
+	Off = 0
+}
+
 [PublicAPI]
 public class Item
 {
@@ -130,6 +138,8 @@ public class Item
 		public ConfigEntry<int> tableLevel = null!;
 		public ConfigEntry<string> customTable = null!;
 		public ConfigEntry<int>? maximumTableLevel;
+		public ConfigEntry<Toggle> requireOneIngredient = null!;
+		public ConfigEntry<float> qualityResultAmountMultiplier = null!;
 	}
 
 	private static readonly List<Item> registeredItems = new();
@@ -174,6 +184,18 @@ public class Item
 
 	[Description("Specifies the maximum required crafting station level to upgrade and repair the item.\nDefault is calculated from crafting station level and maximum quality.")]
 	public int MaximumRequiredStationLevel = int.MaxValue;
+
+	public bool RequireOnlyOneIngredient
+	{
+		get => this[""].RequireOnlyOneIngredient;
+		set => this[""].RequireOnlyOneIngredient = value;
+	}
+
+	public float QualityResultAmountMultiplier
+	{
+		get => this[""].QualityResultAmountMultiplier;
+		set => this[""].QualityResultAmountMultiplier = value;
+	}
 
 	[Description("Assigns the item as a drop item to a creature.\nUses a creature name, a drop chance and a minimum and maximum amount.")]
 	public readonly DropTargets DropsFrom = new();
@@ -372,10 +394,11 @@ public class Item
 						int order = 0;
 
 						string configSuffix = configKey == "" ? "" : $" ({configKey})";
-						ItemConfig cfg = itemCraftConfigs[item][configKey] = new ItemConfig();
 
 						if (item.Recipes.ContainsKey(configKey) && item.Recipes[configKey].Crafting.Stations.Count > 0)
 						{
+							ItemConfig cfg = itemCraftConfigs[item][configKey] = new ItemConfig();
+
 							List<ConfigurationManagerAttributes> hideWhenNoneAttributes = new();
 
 							cfg.table = config(englishName, "Crafting Station" + configSuffix, item.Recipes[configKey].Crafting.Stations.First().Table, new ConfigDescription($"Crafting station where {englishName} is available.", null, new ConfigurationManagerAttributes { Order = --order, Browsable = (item.configurationVisible & Configurability.Recipe) != 0, Category = localizedName }));
@@ -428,6 +451,33 @@ public class Item
 								cfg.maximumTableLevel = config(englishName, "Maximum Crafting Station Level" + configSuffix, item.MaximumRequiredStationLevel == int.MaxValue ? item.Recipes[configKey].Crafting.Stations.First().level + item.Prefab.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality - 1 : item.MaximumRequiredStationLevel, new ConfigDescription($"Maximum crafting station level to upgrade and repair {englishName}.", null, tableLevelAttributes));
 							}
 
+							bool QualityResultBrowsability() => cfg.requireOneIngredient.Value == Toggle.On;
+							cfg.requireOneIngredient = config(englishName, "Require only one resource" + configSuffix, item.Recipes[configKey].RequireOnlyOneIngredient ? Toggle.On : Toggle.Off, new ConfigDescription($"Whether only one of the ingredients is needed to craft {englishName}", null, new ConfigurationManagerAttributes { Order = --order, Category = localizedName }));
+							ConfigurationManagerAttributes qualityResultAttributes = new() { Order = --order, browsability = QualityResultBrowsability, Browsable = QualityResultBrowsability() && (item.configurationVisible & Configurability.Recipe) != 0, Category = localizedName };
+							cfg.requireOneIngredient.SettingChanged += (_, _) =>
+							{
+								if (activeRecipes.ContainsKey(item) && activeRecipes[item].TryGetValue(configKey, out List<Recipe> recipes))
+								{
+									foreach (Recipe recipe in recipes)
+									{
+										recipe.m_requireOnlyOneIngredient = cfg.requireOneIngredient.Value == Toggle.On;
+									}
+								}
+								qualityResultAttributes.Browsable = QualityResultBrowsability();
+								reloadConfigDisplay();
+							};
+							cfg.qualityResultAmountMultiplier = config(englishName, "Quality Multiplier" + configSuffix, item.Recipes[configKey].QualityResultAmountMultiplier, new ConfigDescription($"Multiplies the crafted amount based on the quality of the resources when crafting {englishName}. Only works, if Require Only One Resource is true.", null, qualityResultAttributes));
+							cfg.qualityResultAmountMultiplier.SettingChanged += (_, _) =>
+							{
+								if (activeRecipes.ContainsKey(item) && activeRecipes[item].TryGetValue(configKey, out List<Recipe> recipes))
+								{
+									foreach (Recipe recipe in recipes)
+									{
+										recipe.m_qualityResultAmountMultiplier = cfg.qualityResultAmountMultiplier.Value;
+									}
+								}
+							};
+
 							ConfigEntry<string> itemConfig(string name, string value, string desc)
 							{
 								bool ItemBrowsability() => cfg.table.Value != CraftingTable.Disabled;
@@ -469,7 +519,7 @@ public class Item
 
 					if ((item.configurability & Configurability.Drop) != 0)
 					{
-						ConfigEntry<string> dropConfig = itemDropConfigs[item] = config(englishName, "Drops from", new SerializedDrop(item.DropsFrom.Drops).ToString(), new ConfigDescription($"Creatures {englishName} drops from", null, new ConfigurationManagerAttributes { CustomDrawer = drawDropsConfigTable, Category = localizedName, Browsable = (item.configurationVisible & Configurability.Drop) != 0 }));
+						ConfigEntry<string> dropConfig = itemDropConfigs[item] = config(englishName, "Drops from", new SerializedDrop(item.DropsFrom.Drops).ToString(), new ConfigDescription($"{englishName} drops from this creature.", null, new ConfigurationManagerAttributes { CustomDrawer = drawDropsConfigTable, Category = localizedName, Browsable = (item.configurationVisible & Configurability.Drop) != 0 }));
 						dropConfig.SettingChanged += (_, _) => item.UpdateCharacterDrop();
 					}
 
@@ -554,8 +604,8 @@ public class Item
 						{
 							setValue(shared, cfg.Value);
 
-							Inventory[] inventories = Player.m_players.Select(p => p.GetInventory()).Concat(UnityEngine.Object.FindObjectsOfType<Container>().Select(c => c.GetInventory())).Where(c => c is not null).ToArray();
-							foreach (ItemDrop.ItemData itemdata in ObjectDB.instance.m_items.Select(p => p.GetComponent<ItemDrop>()).Where(c => c && c.GetComponent<ZNetView>()).Concat(ItemDrop.m_instances).Select(i => i.m_itemData).Concat(inventories.SelectMany(i => i.GetAllItems())))
+							Inventory[] inventories = Player.s_players.Select(p => p.GetInventory()).Concat(UnityEngine.Object.FindObjectsOfType<Container>().Select(c => c.GetInventory())).Where(c => c is not null).ToArray();
+							foreach (ItemDrop.ItemData itemdata in ObjectDB.instance.m_items.Select(p => p.GetComponent<ItemDrop>()).Where(c => c && c.GetComponent<ZNetView>()).Concat(ItemDrop.s_instances).Select(i => i.m_itemData).Concat(inventories.SelectMany(i => i.GetAllItems())))
 							{
 								if (itemdata.m_shared.m_name == itemName)
 								{
@@ -563,7 +613,7 @@ public class Item
 								}
 							}
 						}
-						
+
 						item.statsConfigs.Add(cfg, ApplyConfig);
 
 						cfg.SettingChanged += (_, _) =>
@@ -778,10 +828,10 @@ public class Item
 
 					Recipe recipe = ScriptableObject.CreateInstance<Recipe>();
 					recipe.name = $"{item.Prefab.name}_Recipe_{station.Table.ToString()}";
-					recipe.m_amount = item[kv.Key].CraftAmount;
+					recipe.m_amount = kv.Value.CraftAmount;
 					recipe.m_enabled = cfg?.table.Value != CraftingTable.Disabled;
 					recipe.m_item = item.Prefab.GetComponent<ItemDrop>();
-					recipe.m_resources = SerializedRequirements.toPieceReqs(__instance, cfg?.craft == null ? new SerializedRequirements(item[kv.Key].RequiredItems.Requirements) : new SerializedRequirements(cfg.craft.Value), cfg?.upgrade == null ? new SerializedRequirements(item[kv.Key].RequiredUpgradeItems.Requirements) : new SerializedRequirements(cfg.upgrade.Value));
+					recipe.m_resources = SerializedRequirements.toPieceReqs(__instance, cfg?.craft == null ? new SerializedRequirements(kv.Value.RequiredItems.Requirements) : new SerializedRequirements(cfg.craft.Value), cfg?.upgrade == null ? new SerializedRequirements(kv.Value.RequiredUpgradeItems.Requirements) : new SerializedRequirements(cfg.upgrade.Value));
 					if ((cfg == null || recipes.Count > 0 ? station.Table : cfg.table.Value) is CraftingTable.Inventory or CraftingTable.Disabled)
 					{
 						recipe.m_craftingStation = null;
@@ -802,14 +852,16 @@ public class Item
 						recipe.m_craftingStation = ZNetScene.instance.GetPrefab(getInternalName(cfg == null || recipes.Count > 0 ? station.Table : cfg.table.Value)).GetComponent<CraftingStation>();
 					}
 					recipe.m_minStationLevel = cfg == null || recipes.Count > 0 ? station.level : cfg.tableLevel.Value;
+					recipe.m_requireOnlyOneIngredient = cfg == null ? kv.Value.RequireOnlyOneIngredient : cfg.requireOneIngredient.Value == Toggle.On;
+					recipe.m_qualityResultAmountMultiplier = cfg?.qualityResultAmountMultiplier.Value ?? kv.Value.QualityResultAmountMultiplier;
 					recipe.m_enabled = (int)(kv.Value.RecipeIsActive?.BoxedValue ?? 1) != 0;
 
 					recipes.Add(recipe);
-					if (!item[kv.Key].RequiredItems.Free && item[kv.Key].RequiredItems.Requirements.Count == 0)
+					if (kv.Value.RequiredItems is { Free: false, Requirements.Count: 0 })
 					{
 						hiddenCraftRecipes.Add(recipe, kv.Value.RecipeIsActive);
 					}
-					if (!item[kv.Key].RequiredUpgradeItems.Free && item[kv.Key].RequiredUpgradeItems.Requirements.Count == 0)
+					if (kv.Value.RequiredUpgradeItems is { Free: false, Requirements.Count: 0 })
 					{
 						hiddenUpgradeRecipes.Add(recipe, kv.Value.RecipeIsActive);
 					}
@@ -937,7 +989,7 @@ public class Item
 		{
 			drops = new SerializedDrop(config.Value);
 		}
-		foreach (KeyValuePair<Character, CharacterDrop.Drop> kv in drops.toCharacterDrops(ZNetScene.m_instance, Prefab))
+		foreach (KeyValuePair<Character, CharacterDrop.Drop> kv in drops.toCharacterDrops(ZNetScene.s_instance, Prefab))
 		{
 			if (kv.Key.GetComponent<CharacterDrop>() is not { } characterDrop)
 			{
@@ -1122,7 +1174,7 @@ public class Item
 			float chance = drop.chance;
 			if (float.TryParse(GUILayout.TextField((chance * 100).ToString(CultureInfo.InvariantCulture), new GUIStyle(GUI.skin.textField) { fixedWidth = 45 }), out float newChance) && !Mathf.Approximately(newChance / 100, chance) && !locked)
 			{
-				chance = newChance;
+				chance = newChance / 100;
 				wasUpdated = true;
 			}
 			GUILayout.Label("% Amount: ");
