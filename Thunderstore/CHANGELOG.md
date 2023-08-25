@@ -1,4 +1,6 @@
 > # Update Information (Latest listed first)
+> ### 1.0.6
+> - Updates for Valheim 0.217.14
 > ### 1.0.5
 > - Updates for Valheim 0.216.9
 > ### 1.0.4

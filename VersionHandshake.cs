@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using HarmonyLib;
 
 namespace EvilSpiritKatana
@@ -11,13 +15,13 @@ namespace EvilSpiritKatana
         {
             // Register version check call
             EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogDebug("Registering version RPC handler");
-            peer.m_rpc.Register($"{EvilSpiritKatanaPlugin.ModName}_VersionCheck",
-                new Action<ZRpc, ZPackage>(RpcHandlers.RPC_EvilSpiritKatana_Version));
+            peer.m_rpc.Register($"{EvilSpiritKatanaPlugin.ModName}_VersionCheck", new Action<ZRpc, ZPackage>(RpcHandlers.RPC_AllManagersModTemplate_Version));
 
             // Make calls to check versions
-            EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogInfo("Invoking version check");
+            EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogDebug("Invoking version check");
             ZPackage zpackage = new();
             zpackage.Write(EvilSpiritKatanaPlugin.ModVersion);
+            zpackage.Write(RpcHandlers.ComputeHashForMod().Replace("-", ""));
             peer.m_rpc.Invoke($"{EvilSpiritKatanaPlugin.ModName}_VersionCheck", zpackage);
         }
     }
@@ -29,15 +33,14 @@ namespace EvilSpiritKatana
         {
             if (!__instance.IsServer() || RpcHandlers.ValidatedPeers.Contains(rpc)) return true;
             // Disconnect peer if they didn't send mod version at all
-            EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogWarning(
-                $"Peer ({rpc.m_socket.GetHostName()}) never sent version or couldn't due to previous disconnect, disconnecting");
+            EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogWarning($"Peer ({rpc.m_socket.GetHostName()}) never sent version or couldn't due to previous disconnect, disconnecting");
             rpc.Invoke("Error", 3);
             return false; // Prevent calling underlying method
         }
 
         private static void Postfix(ZNet __instance)
         {
-            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.instance.GetServerPeerID(), "RequestAdminSync",
+            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.instance.GetServerPeerID(), $"{EvilSpiritKatanaPlugin.ModName}RequestAdminSync",
                 new ZPackage());
         }
     }
@@ -48,7 +51,11 @@ namespace EvilSpiritKatana
         private static void Postfix(FejdStartup __instance)
         {
             if (__instance.m_connectionFailedPanel.activeSelf)
+            {
+                __instance.m_connectionFailedError.resizeTextMaxSize = 25;
+                __instance.m_connectionFailedError.resizeTextMinSize = 15;
                 __instance.m_connectionFailedError.text += "\n" + EvilSpiritKatanaPlugin.ConnectionError;
+            }
         }
     }
 
@@ -69,20 +76,21 @@ namespace EvilSpiritKatana
     {
         public static readonly List<ZRpc> ValidatedPeers = new();
 
-        public static void RPC_EvilSpiritKatana_Version(ZRpc rpc, ZPackage pkg)
+        public static void RPC_AllManagersModTemplate_Version(ZRpc rpc, ZPackage pkg)
         {
             string? version = pkg.ReadString();
+            string? hash = pkg.ReadString();
+
+            var hashForAssembly = ComputeHashForMod().Replace("-", "");
             EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogInfo("Version check, local: " +
                                                                   EvilSpiritKatanaPlugin.ModVersion +
                                                                   ",  remote: " + version);
-            if (version != EvilSpiritKatanaPlugin.ModVersion)
+            if (hash != hashForAssembly || version != EvilSpiritKatanaPlugin.ModVersion)
             {
-                EvilSpiritKatanaPlugin.ConnectionError =
-                    $"{EvilSpiritKatanaPlugin.ModName} Installed: {EvilSpiritKatanaPlugin.ModVersion}\n Needed: {version}";
+                EvilSpiritKatanaPlugin.ConnectionError = $"{EvilSpiritKatanaPlugin.ModName} Installed: {EvilSpiritKatanaPlugin.ModVersion} {hashForAssembly}\n Needed: {version} {hash}";
                 if (!ZNet.instance.IsServer()) return;
                 // Different versions - force disconnect client from server
-                EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogWarning(
-                    $"Peer ({rpc.m_socket.GetHostName()}) has incompatible version, disconnecting");
+                EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogWarning($"Peer ({rpc.m_socket.GetHostName()}) has incompatible version, disconnecting...");
                 rpc.Invoke("Error", 3);
             }
             else
@@ -90,7 +98,8 @@ namespace EvilSpiritKatana
                 if (!ZNet.instance.IsServer())
                 {
                     // Enable mod on client if versions match
-                    EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogInfo("Received same version from server!");
+                    EvilSpiritKatanaPlugin.EvilSpiritKatanaLogger.LogInfo(
+                        "Received same version from server!");
                 }
                 else
                 {
@@ -100,6 +109,21 @@ namespace EvilSpiritKatana
                     ValidatedPeers.Add(rpc);
                 }
             }
+        }
+
+        public static string ComputeHashForMod()
+        {
+            using SHA256 sha256Hash = SHA256.Create();
+            // ComputeHash - returns byte array  
+            byte[] bytes = sha256Hash.ComputeHash(File.ReadAllBytes(Assembly.GetExecutingAssembly().Location));
+            // Convert byte array to a string   
+            StringBuilder builder = new();
+            foreach (byte b in bytes)
+            {
+                builder.Append(b.ToString("X2"));
+            }
+
+            return builder.ToString();
         }
     }
 }

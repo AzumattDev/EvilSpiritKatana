@@ -1,10 +1,12 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using ItemManager;
+using JetBrains.Annotations;
 using ServerSync;
 using UnityEngine;
 
@@ -14,7 +16,7 @@ namespace EvilSpiritKatana
     public class EvilSpiritKatanaPlugin : BaseUnityPlugin
     {
         internal const string ModName = "EvilSpiritKatana";
-        internal const string ModVersion = "1.0.5";
+        internal const string ModVersion = "1.0.6";
         internal const string Author = "Azumatt";
         private const string ModGUID = Author + "." + ModName;
         private static string ConfigFileName = ModGUID + ".cfg";
@@ -85,7 +87,7 @@ namespace EvilSpiritKatana
         #region ConfigOptions
 
         private static ConfigEntry<bool> _serverConfigLocked = null!;
-        private static ConfigEntry<bool>? _recipeIsActiveConfig = null!;
+        //private static ConfigEntry<bool>? _recipeIsActiveConfig = null!;
 
         private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description,
             bool synchronizedSetting = true)
@@ -112,7 +114,10 @@ namespace EvilSpiritKatana
 
         private class ConfigurationManagerAttributes
         {
-            public bool? Browsable = false;
+            [UsedImplicitly] public int? Order = null!;
+            [UsedImplicitly] public bool? Browsable = null!;
+            [UsedImplicitly] public string? Category = null!;
+            [UsedImplicitly] public Action<ConfigEntryBase>? CustomDrawer = null!;
         }
 
         #endregion
