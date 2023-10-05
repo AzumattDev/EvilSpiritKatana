@@ -1,9 +1,9 @@
 {
   "name": "Evil_Spirit_Katana",
-  "version_number": "1.0.6",
+  "version_number": "1.0.7",
   "website_url": "https://discord.gg/Pb6bVMnFb2",
   "description": "Adds a katana to the game. Nothing more. Fully configurable. Zappelfab request in OdinPlus discord.",
   "dependencies": [
-    "denikson-BepInExPack_Valheim-5.4.2105"
+    "denikson-BepInExPack_Valheim-5.4.2200"
   ]
 }
