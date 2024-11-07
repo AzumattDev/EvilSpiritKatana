@@ -23,10 +23,12 @@ public enum CraftingTable
 	Inventory,
 	[InternalName("piece_workbench")] Workbench,
 	[InternalName("piece_cauldron")] Cauldron,
+	[InternalName("piece_MeadCauldron")] MeadCauldron,
 	[InternalName("forge")] Forge,
 	[InternalName("piece_artisanstation")] ArtisanTable,
 	[InternalName("piece_stonecutter")] StoneCutter,
 	[InternalName("piece_magetable")] MageTable,
+	[InternalName("piece_preptable")] PrepTable,
 	[InternalName("blackforge")] BlackForge,
 	Custom,
 }
@@ -411,7 +413,13 @@ public class Item
 
 	private delegate void setDmgFunc(ref HitData.DamageTypes dmg, float value);
 
-	internal static void reloadConfigDisplay() => configManager?.GetType().GetMethod("BuildSettingList")!.Invoke(configManager, Array.Empty<object>());
+	internal static void reloadConfigDisplay()
+	{
+		if (configManager?.GetType().GetProperty("DisplayingWindow")!.GetValue(configManager) is true)
+		{
+			configManager.GetType().GetMethod("BuildSettingList")!.Invoke(configManager, Array.Empty<object>());
+		}
+	}
 
 	private void UpdateItemTableConfig(string recipeKey, CraftingTable table, string customTableValue)
 	{
@@ -623,7 +631,7 @@ public class Item
 							}
 						}
 
-						conversion.config.input = config(englishName, $"{prefix}Conversion Input Item", conversion.Input, new ConfigDescription($"Duration of conversion to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
+						conversion.config.input = config(englishName, $"{prefix}Conversion Input Item", conversion.Input, new ConfigDescription($"Input item to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
 						conversion.config.input.SettingChanged += (_, _) =>
 						{
 							if (index < item.conversions.Count && ObjectDB.instance is { } objectDB)
@@ -633,9 +641,9 @@ public class Item
 								UpdatePiece();
 							}
 						};
-						conversion.config.piece = config(englishName, $"{prefix}Conversion Piece", conversion.Piece, new ConfigDescription($"Duration of conversion to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
+						conversion.config.piece = config(englishName, $"{prefix}Conversion Piece", conversion.Piece, new ConfigDescription($"Conversion piece used to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
 						conversion.config.piece.SettingChanged += (_, _) => UpdatePiece();
-						conversion.config.customPiece = config(englishName, $"{prefix}Conversion Custom Piece", conversion.customPiece ?? "", new ConfigDescription($"Duration of conversion to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
+						conversion.config.customPiece = config(englishName, $"{prefix}Conversion Custom Piece", conversion.customPiece ?? "", new ConfigDescription($"Custom conversion piece to create {englishName}", null, new ConfigurationManagerAttributes { Category = localizedName, Browsable = (item.configurationVisible & Configurability.Recipe) != 0 }));
 						conversion.config.customPiece.SettingChanged += (_, _) => UpdatePiece();
 					}
 				}
@@ -961,7 +969,7 @@ public class Item
 				Recipe recipe = ScriptableObject.CreateInstance<Recipe>();
 				recipe.name = $"{Prefab.name}_Recipe_{station.Table.ToString()}";
 				recipe.m_amount = kv.Value.CraftAmount;
-				recipe.m_enabled = cfg?.table.Value != CraftingTable.Disabled;
+				recipe.m_enabled = cfg is null ? (int)(kv.Value.RecipeIsActive?.BoxedValue ?? 1) != 0 : cfg.table.Value != CraftingTable.Disabled;
 				recipe.m_item = Prefab.GetComponent<ItemDrop>();
 				recipe.m_resources = SerializedRequirements.toPieceReqs(objectDB, cfg?.craft == null ? new SerializedRequirements(kv.Value.RequiredItems.Requirements) : new SerializedRequirements(cfg.craft.Value), cfg?.upgrade == null ? new SerializedRequirements(kv.Value.RequiredUpgradeItems.Requirements) : new SerializedRequirements(cfg.upgrade.Value));
 				if ((cfg == null || recipes.Count > 0 ? station.Table : cfg.table.Value) is CraftingTable.Inventory or CraftingTable.Disabled)
@@ -986,7 +994,6 @@ public class Item
 				recipe.m_minStationLevel = cfg == null || recipes.Count > 0 ? station.level : cfg.tableLevel.Value;
 				recipe.m_requireOnlyOneIngredient = cfg == null ? kv.Value.RequireOnlyOneIngredient : cfg.requireOneIngredient.Value == Toggle.On;
 				recipe.m_qualityResultAmountMultiplier = cfg?.qualityResultAmountMultiplier.Value ?? kv.Value.QualityResultAmountMultiplier;
-				recipe.m_enabled = (int)(kv.Value.RecipeIsActive?.BoxedValue ?? 1) != 0;
 
 				recipes.Add(recipe);
 				if (kv.Value.RequiredItems is { Free: false, Requirements.Count: 0 })
@@ -1036,7 +1043,7 @@ public class Item
 	[HarmonyPriority(Priority.Last)]
 	internal static void Patch_ObjectDBInit(ObjectDB __instance)
 	{
-		if (__instance.GetItemPrefab("Wood") == null)
+		if (__instance.GetItemPrefab("YagluthDrop") == null)
 		{
 			return;
 		}
@@ -1378,7 +1385,7 @@ public class Item
 		}
 	}
 
-	private static bool CheckItemIsUpgrade(InventoryGui gui) => gui.m_selectedRecipe.Value?.m_quality > 0;
+	private static bool CheckItemIsUpgrade(InventoryGui gui) => gui.m_selectedRecipe.ItemData?.m_quality > 0;
 
 	internal static IEnumerable<CodeInstruction> Transpile_InventoryGui(IEnumerable<CodeInstruction> instructions)
 	{
@@ -1544,7 +1551,7 @@ public class Item
 
 			GUILayout.Label("Chance: ");
 			float chance = drop.chance;
-			if (float.TryParse(GUILayout.TextField((chance * 100).ToString(CultureInfo.InvariantCulture), new GUIStyle(GUI.skin.textField) { fixedWidth = 45 }), out float newChance) && !Mathf.Approximately(newChance / 100, chance) && !locked)
+			if (float.TryParse(GUILayout.TextField((chance * 100).ToString(CultureInfo.InvariantCulture), new GUIStyle(GUI.skin.textField) { fixedWidth = 45 }), NumberStyles.Float, CultureInfo.InvariantCulture, out float newChance) && !Mathf.Approximately(newChance / 100, chance) && !locked)
 			{
 				chance = newChance / 100;
 				wasUpdated = true;
@@ -1798,7 +1805,11 @@ public class LocalizeKey
 	public readonly string Key;
 	public readonly Dictionary<string, string> Localizations = new();
 
-	public LocalizeKey(string key) => Key = key.Replace("$", "");
+	public LocalizeKey(string key)
+	{
+		Key = key.Replace("$", "");
+		keys.Add(this);
+	}
 
 	public void Alias(string alias)
 	{
@@ -1871,7 +1882,7 @@ public class LocalizeKey
 			}
 			else if (key.Localizations.TryGetValue("alias", out string alias))
 			{
-				Localization.instance.AddWord(key.Key, Localization.instance.Localize(alias));
+				__instance.AddWord(key.Key, Localization.instance.Localize(alias));
 			}
 		}
 	}
@@ -2016,7 +2027,7 @@ public static class PrefabManager
 			RegisterStatusEffect(shared.m_setStatusEffect);
 		}
 
-		__instance.UpdateItemHashes();
+		__instance.UpdateRegisters();
 	}
 
 	[HarmonyPriority(Priority.VeryHigh)]

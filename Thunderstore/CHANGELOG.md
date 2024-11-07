@@ -1,4 +1,6 @@
 > # Update Information (Latest listed first)
+> ### 1.0.9
+> - Update for Bog Witch. Update ItemManager internally.
 > ### 1.0.8
 > - Courtesy Update for Valheim 0.217.46. Just bumping the version and updating the last updated date. Nothing to see here.
 > ### 1.0.7
